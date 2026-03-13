@@ -7,7 +7,12 @@ echo "====================================="
 echo "   Setting up Lex-Norm on Kaggle     "
 echo "====================================="
 
+# Init and pull git submodules (to get data/ViLexNorm dataset)
+echo "Pulling git submodules..."
+git submodule update --init --recursive
+
 # Install dependencies (Kaggle usually has torch, we install the rest)
+echo "Installing requirements..."
 pip install -r requirements.txt
 
 # Get experiment from argument, default to baseline if not provided
