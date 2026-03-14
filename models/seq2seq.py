@@ -37,13 +37,26 @@ class Seq2Seq(nn.Module):
             dtype=torch.long, device=device
         )
 
+        unfinished_sequences = torch.ones(batch_size, dtype=torch.long, device=device)
+
         for _ in range(max_length):
             logits = self.decoder(decoder_input, encoder_out, encoder_attention_mask=src_mask)
-            next_token = logits[:, -1, :].argmax(dim=-1, keepdim=True)
-            decoder_input = torch.cat([decoder_input, next_token], dim=1)
+            next_token_logits = logits[:, -1, :]
+            
+            # Simple repetition penalty (optional but good practice)
+            # Not strictly needed if EOS fixing works, but let's stick to the EOS fix first.
+            next_token = next_token_logits.argmax(dim=-1)
+
+            # If the sequence is already finished, force the next token to be PAD
+            next_token = next_token * unfinished_sequences + self.pad_token_id * (1 - unfinished_sequences)
+            
+            # Update finished status
+            unfinished_sequences = unfinished_sequences.mul((next_token != self.eos_token_id).long())
+
+            decoder_input = torch.cat([decoder_input, next_token.unsqueeze(-1)], dim=1)
 
             # stop if all sequences generated EOS
-            if (next_token == self.eos_token_id).all():
+            if unfinished_sequences.max() == 0:
                 break
 
         return decoder_input
