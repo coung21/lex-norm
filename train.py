@@ -133,10 +133,10 @@ def train_contrastive(config, tokenizer, max_samples=None, override_epochs=None)
     decoder = Decoder(pretrained)
     model = Seq2Seq(trained_encoder, decoder)
 
-    # only optimize decoder params
-    decoder_params = [p for p in model.parameters() if p.requires_grad]
+    # optimize all params, even if frozen. Optimizer will ignore frozen params 
+    # until they are unfrozen by progressive fine-tuning.
     optimizer = torch.optim.AdamW(
-        decoder_params, lr=s2['lr'], weight_decay=s2['weight_decay']
+        model.parameters(), lr=s2['lr'], weight_decay=s2['weight_decay']
     )
 
     train_loader, val_loader = build_dataloaders(

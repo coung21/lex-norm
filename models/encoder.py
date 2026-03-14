@@ -14,6 +14,11 @@ class Encoder(nn.Module):
         for param in self.parameters():
             param.requires_grad = False
 
+    def unfreeze(self):
+        """Unfreeze all encoder parameters for progressive fine-tuning."""
+        for param in self.parameters():
+            param.requires_grad = True
+
     def forward(self, input_ids, attention_mask=None):
         outputs = self.encoder(
             input_ids=input_ids,

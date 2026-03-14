@@ -125,6 +125,13 @@ class Trainer:
     def fit(self, num_epochs):
         for epoch in range(1, num_epochs + 1):
             print(f'\n--- Epoch {epoch}/{num_epochs} ---')
+            
+            # Progressive fine-tuning
+            unfreeze_epoch = self.config.get('unfreeze_epoch', -1)
+            if epoch == unfreeze_epoch and hasattr(self.model, 'encoder'):
+                print(f'Unfreezing encoder at epoch {epoch}...')
+                self.model.encoder.unfreeze()
+            
             train_loss = self.train_epoch()
             val_loss = self.evaluate()
 

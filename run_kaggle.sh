@@ -25,7 +25,7 @@ echo "====================================="
 
 # If you want to use wandb without prompting, make sure to add WANDB_API_KEY 
 # to Kaggle Secrets and run: export WANDB_API_KEY=your_key_here before running this script
-python train.py --experiment $EXPERIMENT
+python train.py --experiment $EXPERIMENT --epochs 4
 
 echo ""
 echo "====================================="
