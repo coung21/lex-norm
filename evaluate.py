@@ -12,6 +12,7 @@ import pandas as pd
 import torch
 from tqdm import tqdm
 from transformers import AutoTokenizer
+import wandb
 
 from models import Encoder, Decoder, Seq2Seq
 from utils.metrics import compute_all_metrics
@@ -68,6 +69,15 @@ def main():
     args = parser.parse_args()
 
     config = load_config(args.experiment)
+    
+    # Initialize wandb for evaluation
+    wandb.init(
+        project=config['wandb']['project'],
+        name=config['wandb']['run_name'] + f'-eval-{args.split}',
+        config=config,
+        job_type='evaluation'
+    )
+    
     tokenizer = AutoTokenizer.from_pretrained(config['model']['pretrained_name'])
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -91,13 +101,27 @@ def main():
     for name, value in metrics.items():
         print(f'  {name}: {value:.4f}')
 
-    # show some examples
+    # log metrics to wandb
+    wandb.log({f'eval/{args.split}/{k}': v for k, v in metrics.items()})
+
+    # show some examples and log a table to wandb
     print('\n--- Examples ---')
+    table = wandb.Table(columns=['Input', 'Prediction', 'Reference'])
+    
     for i in range(min(5, len(test_data))):
-        print(f'  Input:      {test_data.iloc[i]["original"]}')
-        print(f'  Prediction: {predictions[i]}')
-        print(f'  Reference:  {test_data.iloc[i]["normalized"]}')
+        orig_text = test_data.iloc[i]["original"]
+        pred_text = predictions[i]
+        ref_text = test_data.iloc[i]["normalized"]
+        
+        print(f'  Input:      {orig_text}')
+        print(f'  Prediction: {pred_text}')
+        print(f'  Reference:  {ref_text}')
         print()
+        
+        table.add_data(orig_text, pred_text, ref_text)
+        
+    wandb.log({f'{args.split}_predictions_sample': table})
+    wandb.finish()
 
 
 if __name__ == '__main__':
