@@ -62,6 +62,7 @@ class DiscreteLexNormModel(ModelWrapper):
         super().__init__(None) # Using None as we implement forward ourselves without wrapping a single module
         
         bartpho = AutoModel.from_pretrained(pretrained_name)
+        self.encoder = bartpho.encoder
         self.decoder = bartpho.decoder
         
         self.d_model = bartpho.config.d_model

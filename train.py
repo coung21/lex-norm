@@ -41,7 +41,7 @@ def evaluate(model, solver, loader, tokenizer, device, epoch, args, prefix="eval
             norm_ids = batch['norm_ids'].to(device)
             
             # Encoder forward
-            encoder_out = model.encoder(input_ids=noisy_ids, attention_mask=noisy_mask)
+            encoder_out = model.encoder(input_ids=noisy_ids, attention_mask=noisy_mask).last_hidden_state
             
             batch_size = noisy_ids.size(0)
             seq_len = noisy_ids.size(1)
@@ -145,7 +145,7 @@ def train(args):
             norm_mask = batch['norm_mask'].to(device)
             
             # Encoder forward
-            encoder_out = model.encoder(input_ids=noisy_ids, attention_mask=noisy_mask)
+            encoder_out = model.encoder(input_ids=noisy_ids, attention_mask=noisy_mask).last_hidden_state
             
             batch_size = noisy_ids.size(0)
             seq_len = noisy_ids.size(1)
