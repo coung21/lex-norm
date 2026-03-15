@@ -4,8 +4,13 @@
 set -e
 
 echo "==========================================="
-echo "🚀 BƯỚC 1: Cài đặt các thư viện cần thiết"
+echo "🚀 BƯỚC 1: Cập nhật Submodule và Cài đặt Thư viện"
 echo "==========================================="
+# Pull các submodule (nếu project bạn đang chứa submodule cho dataset/model)
+echo "Đang cập nhật git submodules..."
+git submodule update --init --recursive
+
+echo "Đang cài đặt các thư viện từ requirements.txt..."
 pip install -r requirements.txt
 
 # (Tuỳ chọn) Nếu flow_matching cần cài từ GitHub, bỏ comment dòng dưới:
