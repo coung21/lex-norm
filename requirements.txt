@@ -6,3 +6,4 @@ sentencepiece
 pyyaml
 wandb
 pandas
+flow_matching
