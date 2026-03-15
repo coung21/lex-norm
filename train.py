@@ -120,15 +120,18 @@ def train_contrastive(config, tokenizer, max_samples=None, override_epochs=None)
     s2 = config['stage2']
     s2_epochs = override_epochs or s2['epochs']
 
-    # reuse the trained encoder, freeze it
+    # reuse the trained encoder, freeze it based on config
     trained_encoder = contrastive_model.encoder
-    trained_encoder.freeze()
+    if s2.get('freeze_encoder', True):
+        trained_encoder.freeze()
 
-    # verify encoder is frozen
-    frozen_params = sum(1 for p in trained_encoder.parameters() if not p.requires_grad)
-    total_params = sum(1 for p in trained_encoder.parameters())
-    print(f'Encoder frozen: {frozen_params}/{total_params} params frozen')
-    assert frozen_params == total_params, 'Encoder not fully frozen!'
+        # verify encoder is frozen
+        frozen_params = sum(1 for p in trained_encoder.parameters() if not p.requires_grad)
+        total_params = sum(1 for p in trained_encoder.parameters())
+        print(f'Encoder frozen: {frozen_params}/{total_params} params frozen')
+        assert frozen_params == total_params, 'Encoder not fully frozen!'
+    else:
+        print('Encoder is NOT frozen. Training whole model from the start of Stage 2.')
 
     decoder = Decoder(pretrained)
     model = Seq2Seq(trained_encoder, decoder)

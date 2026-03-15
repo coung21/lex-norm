@@ -22,8 +22,7 @@ stage2:
   lr: 5.0e-5
   weight_decay: 0.01
   warmup_steps: 500
-  freeze_encoder: true
-  unfreeze_epoch: 8
+  freeze_encoder: false
   output_dir: outputs/contrastive/stage2
 
 wandb:
