@@ -98,6 +98,38 @@ def bleu(predictions, references):
     return bp * math.exp(log_bleu)
 
 
+def f1_score(predictions, references):
+    """
+    Calculates word-level F1 score over the entire corpus.
+    Precision = correct_words / total_predicted_words
+    Recall = correct_words / total_reference_words
+    """
+    total_correct = 0
+    total_pred = 0
+    total_ref = 0
+
+    for pred, ref in zip(predictions, references):
+        pred_tokens = pred.split()
+        ref_tokens = ref.split()
+        
+        total_pred += len(pred_tokens)
+        total_ref += len(ref_tokens)
+        
+        # Find exact matches aligned by position
+        min_len = min(len(pred_tokens), len(ref_tokens))
+        for i in range(min_len):
+            if pred_tokens[i] == ref_tokens[i]:
+                total_correct += 1
+
+    precision = total_correct / total_pred if total_pred > 0 else 0.0
+    recall = total_correct / total_ref if total_ref > 0 else 0.0
+    
+    if precision + recall == 0:
+        return 0.0
+        
+    return 2 * (precision * recall) / (precision + recall)
+
+
 def compute_all_metrics(predictions, references, originals):
     """Compute all metrics, return as dict."""
     return {
@@ -105,6 +137,7 @@ def compute_all_metrics(predictions, references, originals):
         'cer': cer(predictions, references),
         'err': err(predictions, references, originals),
         'bleu': bleu(predictions, references),
+        'f1': f1_score(predictions, references)
     }
 
 

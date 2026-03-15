@@ -1,194 +1,210 @@
-"""
-Unified training entry point for lex-norm experiments.
-
-Usage:
-    python train.py --experiment baseline
-    python train.py --experiment contrastive
-    python train.py --experiment baseline --max_samples 100 --epochs 1  # smoke test
-"""
-
 import argparse
-import yaml
-import pandas as pd
+import os
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
+import pandas as pd
+from tqdm import tqdm
 import wandb
 
-from models import Encoder, Decoder, Seq2Seq, ContrastiveModel
+from flow_matching.path.scheduler import CondOTScheduler
+from flow_matching.path.mixture import MixtureDiscreteProbPath
+from flow_matching.loss.generalized_loss import MixturePathGeneralizedKL
+from flow_matching.solver.discrete_solver import MixtureDiscreteEulerSolver
+from flow_matching.utils import ModelWrapper
+
+from models.dfm_seq2seq import DiscreteLexNormModel
 from utils.dataset import ViLexNormDataset
-from utils.trainer import Trainer
+from utils.metrics import compute_all_metrics
 
+class InferenceWrapper(ModelWrapper):
+    def __init__(self, model):
+        super().__init__(None)
+        self.model = model
+    
+    def forward(self, x, t, **kwargs):
+        logits = self.model(x, t, **kwargs)
+        return torch.softmax(logits, dim=-1)
 
-def load_config(experiment):
-    path = f'configs/{experiment}.yaml'
-    with open(path, 'r') as f:
-        return yaml.safe_load(f)
+def evaluate(model, solver, loader, tokenizer, device, epoch, args, prefix="eval"):
+    model.eval()
+    all_preds = []
+    all_refs = []
+    all_origs = []
+    
+    with torch.no_grad():
+        eval_pbar = tqdm(loader, desc=f"{prefix.capitalize()} Epoch {epoch+1}")
+        for batch in eval_pbar:
+            noisy_ids = batch['noisy_ids'].to(device)
+            noisy_mask = batch['noisy_mask'].to(device)
+            norm_ids = batch['norm_ids'].to(device)
+            
+            # Encoder forward
+            encoder_out = model.encoder(input_ids=noisy_ids, attention_mask=noisy_mask)
+            
+            batch_size = noisy_ids.size(0)
+            seq_len = noisy_ids.size(1)
+            
+            # Inference starts from x_init (random noise)
+            x_init = torch.randint(0, tokenizer.vocab_size, (batch_size, seq_len), device=device)
+            
+            # Model extras for the solver (passed to model under the hood)
+            model_extras = {
+                'encoder_out': encoder_out,
+                'src_mask': noisy_mask
+            }
+            
+            # Sample 10 steps for fast generation
+            time_grid = torch.linspace(0.0, 1.0, steps=11, device=device)
+            
+            gen_ids = solver.sample(
+                x_init=x_init,
+                step_size=None,
+                time_grid=time_grid,
+                **model_extras
+            )
+            
+            # Decode
+            preds = tokenizer.batch_decode(gen_ids, skip_special_tokens=True)
+            refs = tokenizer.batch_decode(norm_ids, skip_special_tokens=True)
+            origs = tokenizer.batch_decode(noisy_ids, skip_special_tokens=True)
+            
+            all_preds.extend(preds)
+            all_refs.extend(refs)
+            all_origs.extend(origs)
+            
+            if args.smoke_test:
+                break
+                
+    # Compute metrics
+    metrics = compute_all_metrics(all_preds, all_refs, all_origs)
+    print(f"{prefix.capitalize()} Epoch {epoch+1} Metrics:")
+    print(metrics)
+    
+    if not args.smoke_test:
+        wandb.log({
+            f"{prefix}/f1": metrics['f1'],
+            f"{prefix}/err": metrics['err'],
+            f"{prefix}/cer": metrics['cer'],
+            f"{prefix}/bleu": metrics['bleu'],
+            f"{prefix}/word_accuracy": metrics['word_accuracy'],
+            "epoch": epoch + 1
+        })
+        
+        # Log a few examples
+        samples_df = pd.DataFrame({
+            "Original": all_origs[:5],
+            "Reference": all_refs[:5],
+            "Prediction": all_preds[:5]
+        })
+        wandb.log({f"{prefix}/samples": wandb.Table(dataframe=samples_df)})
 
+def train(args):
+    # Conditionally use wandb mode
+    mode = "disabled" if args.smoke_test else "online"
+    wandb.init(project="lex-norm-dfm", config=args, mode=mode)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
+    tokenizer = AutoTokenizer.from_pretrained('vinai/bartpho-syllable')
+    
+    train_data = pd.read_csv('data/ViLexNorm/data/train.csv')
+    dev_data = pd.read_csv('data/ViLexNorm/data/dev.csv')
+    test_data = pd.read_csv('data/ViLexNorm/data/test.csv')
+    
+    train_dataset = ViLexNormDataset(train_data, tokenizer, max_length=args.max_length)
+    dev_dataset = ViLexNormDataset(dev_data, tokenizer, max_length=args.max_length)
+    test_dataset = ViLexNormDataset(test_data, tokenizer, max_length=args.max_length)
+    
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+    dev_loader = DataLoader(dev_dataset, batch_size=args.eval_batch_size, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=args.eval_batch_size, shuffle=False)
+    
+    model = DiscreteLexNormModel().to(device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    
+    # dFM setup
+    scheduler = CondOTScheduler()
+    prob_path = MixtureDiscreteProbPath(scheduler)
+    loss_fn = MixturePathGeneralizedKL(prob_path, reduction="none")
+    
+    inference_model = InferenceWrapper(model)
+    solver = MixtureDiscreteEulerSolver(inference_model, prob_path, tokenizer.vocab_size)
+    
+    step = 0
+    for epoch in range(args.epochs):
+        model.train()
+        epoch_loss = 0
+        pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}")
+        for batch in pbar:
+            optimizer.zero_grad()
+            
+            noisy_ids = batch['noisy_ids'].to(device)
+            noisy_mask = batch['noisy_mask'].to(device)
+            norm_ids = batch['norm_ids'].to(device)
+            norm_mask = batch['norm_mask'].to(device)
+            
+            # Encoder forward
+            encoder_out = model.encoder(input_ids=noisy_ids, attention_mask=noisy_mask)
+            
+            batch_size = noisy_ids.size(0)
+            seq_len = noisy_ids.size(1)
+            
+            # dFM Sample t
+            # Usually t is uniform in [0, 1]
+            t = torch.rand(batch_size, device=device) * 0.999 + 1e-4
+            
+            # Sample x_0 (random noise in vocab, except padding)
+            x_0 = torch.randint(0, tokenizer.vocab_size, (batch_size, seq_len), device=device)
+            
+            x_1 = norm_ids
+            
+            # Get x_t
+            path_sample = prob_path.sample(x_0=x_0, x_1=x_1, t=t)
+            x_t = path_sample.x_t
+            
+            # Predict
+            logits = model(x_t, t, encoder_out=encoder_out, src_mask=noisy_mask)
+            
+            # Calculate loss
+            # MixturePathGeneralizedKL expects shape (batch, d), so we pass (batch_size, seq_len)
+            loss_all = loss_fn(logits, x_1, x_t, t)
+            
+            # Mask out PAD tokens
+            loss_mask = norm_mask.float()
+            loss = (loss_all * loss_mask).sum() / loss_mask.sum()
+            
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            optimizer.step()
+            
+            epoch_loss += loss.item()
+            step += 1
+            if not args.smoke_test:
+                wandb.log({"train/loss": loss.item(), "step": step})
+            
+            pbar.set_postfix({"loss": loss.item()})
+            
+            if args.smoke_test and step >= 2:
+                break
+                
+        # Evaluate
+        evaluate(model, solver, dev_loader, tokenizer, device, epoch, args, prefix="eval")
+        
+        if args.smoke_test:
+            break
 
-def build_dataloaders(config, tokenizer, max_samples=None):
-    train_data = pd.read_csv(config['data']['train_path'])
-    val_data = pd.read_csv(config['data']['val_path'])
+    # Evaluate on test set at the end
+    print("Evaluating on test set...")
+    evaluate(model, solver, test_loader, tokenizer, device, args.epochs - 1, args, prefix="test")
 
-    if max_samples:
-        train_data = train_data.head(max_samples)
-        val_data = val_data.head(min(max_samples, len(val_data)))
-
-    max_length = config['data']['max_length']
-    train_dataset = ViLexNormDataset(train_data, tokenizer, max_length)
-    val_dataset = ViLexNormDataset(val_data, tokenizer, max_length)
-
-    batch_size = config.get('training', config.get('stage1', {})).get('batch_size', 16)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=2)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=2)
-
-    return train_loader, val_loader
-
-
-def train_baseline(config, tokenizer, max_samples=None, override_epochs=None):
-    """Experiment 1: full BartPho seq2seq training."""
-    print('=' * 60)
-    print('Experiment 1: Baseline BartPho Seq2Seq')
-    print('=' * 60)
-
-    train_loader, val_loader = build_dataloaders(config, tokenizer, max_samples)
-
-    pretrained = config['model']['pretrained_name']
-    encoder = Encoder(pretrained)
-    decoder = Decoder(pretrained)
-    model = Seq2Seq(encoder, decoder)
-
-    tc = config['training']
-    epochs = override_epochs or tc['epochs']
-    optimizer = torch.optim.AdamW(
-        model.parameters(), lr=tc['lr'], weight_decay=tc['weight_decay']
-    )
-    total_steps = len(train_loader) * epochs
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(
-        optimizer, max_lr=tc['lr'], total_steps=total_steps
-    )
-
-    trainer = Trainer(
-        model, train_loader, val_loader, optimizer, scheduler,
-        config={**tc, 'output_dir': tc['output_dir']},
-        tokenizer=tokenizer, mode='seq2seq'
-    )
-    trainer.fit(epochs)
-
-    return model
-
-
-def train_contrastive(config, tokenizer, max_samples=None, override_epochs=None):
-    """Experiment 2: Stage 1 contrastive → Stage 2 frozen encoder seq2seq."""
-    pretrained = config['model']['pretrained_name']
-
-    # ===== Stage 1: Contrastive Encoder Training =====
-    print('=' * 60)
-    print('Experiment 2 - Stage 1: Contrastive Encoder Training')
-    print('=' * 60)
-
-    s1 = config['stage1']
-    s1_epochs = override_epochs or s1['epochs']
-
-    train_loader, val_loader = build_dataloaders(
-        {**config, 'training': s1}, tokenizer, max_samples
-    )
-
-    encoder = Encoder(pretrained)
-    contrastive_model = ContrastiveModel(encoder, temperature=s1['temperature'])
-
-    optimizer = torch.optim.AdamW(
-        contrastive_model.parameters(), lr=s1['lr'], weight_decay=s1['weight_decay']
-    )
-    total_steps = len(train_loader) * s1_epochs
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(
-        optimizer, max_lr=s1['lr'], total_steps=total_steps
-    )
-
-    trainer = Trainer(
-        contrastive_model, train_loader, val_loader, optimizer, scheduler,
-        config={**s1, 'output_dir': s1['output_dir']},
-        tokenizer=tokenizer, mode='contrastive'
-    )
-    trainer.fit(s1_epochs)
-
-    # ===== Stage 2: Seq2Seq with Frozen Encoder =====
-    print('\n' + '=' * 60)
-    print('Experiment 2 - Stage 2: Seq2Seq (Frozen Encoder)')
-    print('=' * 60)
-
-    s2 = config['stage2']
-    s2_epochs = override_epochs or s2['epochs']
-
-    # reuse the trained encoder, freeze it based on config
-    trained_encoder = contrastive_model.encoder
-    if s2.get('freeze_encoder', True):
-        trained_encoder.freeze()
-
-        # verify encoder is frozen
-        frozen_params = sum(1 for p in trained_encoder.parameters() if not p.requires_grad)
-        total_params = sum(1 for p in trained_encoder.parameters())
-        print(f'Encoder frozen: {frozen_params}/{total_params} params frozen')
-        assert frozen_params == total_params, 'Encoder not fully frozen!'
-    else:
-        print('Encoder is NOT frozen. Training whole model from the start of Stage 2.')
-
-    decoder = Decoder(pretrained)
-    model = Seq2Seq(trained_encoder, decoder)
-
-    # optimize all params, even if frozen. Optimizer will ignore frozen params 
-    # until they are unfrozen by progressive fine-tuning.
-    optimizer = torch.optim.AdamW(
-        model.parameters(), lr=s2['lr'], weight_decay=s2['weight_decay']
-    )
-
-    train_loader, val_loader = build_dataloaders(
-        {**config, 'training': s2}, tokenizer, max_samples
-    )
-    total_steps = len(train_loader) * s2_epochs
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(
-        optimizer, max_lr=s2['lr'], total_steps=total_steps
-    )
-
-    trainer = Trainer(
-        model, train_loader, val_loader, optimizer, scheduler,
-        config={**s2, 'output_dir': s2['output_dir']},
-        tokenizer=tokenizer, mode='seq2seq'
-    )
-    trainer.fit(s2_epochs)
-
-    return model
-
-
-def main():
-    parser = argparse.ArgumentParser(description='Lex-Norm Training')
-    parser.add_argument('--experiment', type=str, required=True,
-                        choices=['baseline', 'contrastive'],
-                        help='Experiment to run')
-    parser.add_argument('--max_samples', type=int, default=None,
-                        help='Max samples for smoke test')
-    parser.add_argument('--epochs', type=int, default=None,
-                        help='Override number of epochs')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--eval_batch_size", type=int, default=16)
+    parser.add_argument("--lr", type=float, default=5e-5)
+    parser.add_argument("--max_length", type=int, default=64)
+    parser.add_argument("--smoke_test", action="store_true", help="Run only 2 steps for testing")
     args = parser.parse_args()
-
-    config = load_config(args.experiment)
-    tokenizer = AutoTokenizer.from_pretrained(config['model']['pretrained_name'])
-
-    # init wandb
-    wandb.init(
-        project=config['wandb']['project'],
-        name=config['wandb']['run_name'],
-        config=config
-    )
-
-    if args.experiment == 'baseline':
-        model = train_baseline(config, tokenizer, args.max_samples, args.epochs)
-    else:
-        model = train_contrastive(config, tokenizer, args.max_samples, args.epochs)
-
-    wandb.finish()
-    print('\nDone!')
-
-
-if __name__ == '__main__':
-    main()
+    train(args)
