@@ -170,9 +170,9 @@ def train(args):
             # MixturePathGeneralizedKL expects shape (batch, d), so we pass (batch_size, seq_len)
             loss_all = loss_fn(logits, x_1, x_t, t)
             
-            # Mask out PAD tokens
-            loss_mask = norm_mask.float()
-            loss = (loss_all * loss_mask).sum() / loss_mask.sum()
+            # Do NOT mask PAD tokens, because the model needs to learn to predict PAD tokens at the end of sequences.
+            # Otherwise, the padded positions remain random noise during inference and produce garbage words.
+            loss = loss_all.mean()
             
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
