@@ -150,7 +150,7 @@ def main():
         num_train_epochs=cfg["epochs"],
         per_device_train_batch_size=cfg["batch_size"],
         per_device_eval_batch_size=cfg["batch_size"],
-        learning_rate=cfg["learning_rate"],
+        learning_rate=float(cfg["learning_rate"]),
         warmup_ratio=cfg["warmup_ratio"],
         weight_decay=cfg["weight_decay"],
         fp16=cfg.get("fp16", True),
