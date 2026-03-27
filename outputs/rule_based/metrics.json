@@ -1,0 +1,32 @@
+{
+  "dev": {
+    "ERR": 0.30121951219512194,
+    "total_needed_changes": 4100,
+    "correct_changes": 1285,
+    "incorrect_changes": 50,
+    "precision": 0.791743684534812,
+    "recall": 0.337093389296957,
+    "F1": 0.47286108555657774,
+    "TP": 1285,
+    "FP": 338,
+    "FN": 2527,
+    "word_accuracy": 0.7944320872497668,
+    "sentence_accuracy": 0.5,
+    "num_samples": 1050
+  },
+  "test": {
+    "ERR": 0.33145780051150897,
+    "total_needed_changes": 3910,
+    "correct_changes": 1347,
+    "incorrect_changes": 51,
+    "precision": 0.8183475091130012,
+    "recall": 0.3678317859093392,
+    "F1": 0.5075357950263752,
+    "TP": 1347,
+    "FP": 299,
+    "FN": 2315,
+    "word_accuracy": 0.806298629121897,
+    "sentence_accuracy": 0.5100478468899522,
+    "num_samples": 1045
+  }
+}

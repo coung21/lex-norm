@@ -1,0 +1,22 @@
+# ViLexNorm - Vietnamese Lexical Normalization Config
+# Model: BARTpho-syllable (vinai/bartpho-syllable)
+
+model_name: "vinai/bartpho-syllable"
+max_length: 64
+batch_size: 16
+learning_rate: 5e-5
+epochs: 4
+warmup_ratio: 0.1
+weight_decay: 0.01
+num_beams: 4
+fp16: true
+
+# Paths
+train_csv: "data/ViLexNorm/data/train.csv"
+dev_csv: "data/ViLexNorm/data/dev.csv"
+test_csv: "data/ViLexNorm/data/test.csv"
+output_dir: "outputs/bartpho"
+
+# Wandb
+wandb_project: "lex-norm"
+wandb_run_name: "bartpho-syllable"
