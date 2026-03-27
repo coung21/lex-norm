@@ -187,6 +187,19 @@ def main():
     trainer.save_model(best_model_dir)
     tokenizer.save_pretrained(best_model_dir)
 
+    # --- Upload checkpoint artifact to wandb ---
+    print("Uploading checkpoint artifact to wandb...")
+    artifact = wandb.Artifact(
+        name=f"{cfg['wandb_run_name']}-checkpoint",
+        type="model",
+        description=f"Best checkpoint for {cfg['wandb_run_name']} "
+                    f"(epochs={cfg['epochs']}, lr={cfg['learning_rate']})",
+        metadata=cfg,
+    )
+    artifact.add_dir(best_model_dir)
+    wandb.log_artifact(artifact)
+    print("  Artifact uploaded.")
+
     print("\nTraining complete!")
     wandb.finish()
 
