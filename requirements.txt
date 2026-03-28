@@ -5,4 +5,5 @@ tqdm
 sentencepiece
 pyyaml
 wandb
-pandas 
+pandas
+openai

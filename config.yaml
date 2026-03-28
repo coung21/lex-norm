@@ -13,6 +13,7 @@ fp16: true
 
 # Paths
 train_csv: "data/ViLexNorm/data/train.csv"
+train_augmented_csv: "data/pseudo_label/train_augmented.csv"
 dev_csv: "data/ViLexNorm/data/dev.csv"
 test_csv: "data/ViLexNorm/data/test.csv"
 output_dir: "outputs/bartpho"
