@@ -109,6 +109,7 @@ def main():
     print(f"  Batch size:  {cfg['batch_size']}")
     print(f"  LR:          {cfg['learning_rate']}")
     print(f"  Max length:  {cfg['max_length']}")
+    print(f"  Train file:  {cfg['train_csv']}")
     print(f"  Output:      {output_dir}")
     print("=" * 60)
 
