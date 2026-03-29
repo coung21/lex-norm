@@ -71,6 +71,7 @@ def main():
     parser.add_argument("--learning_rate", type=float, default=None, help="Override LR")
     parser.add_argument("--output_dir", type=str, default=None, help="Override output dir")
     parser.add_argument("--experiment", type=str, default=None, help="Experiment name")
+    parser.add_argument("--train_csv", type=str, default=None, help="Path to training CSV")
     args = parser.parse_args()
 
     # --- Load config ---
@@ -87,6 +88,8 @@ def main():
         cfg["output_dir"] = args.output_dir
     if args.experiment is not None:
         cfg["wandb_run_name"] = args.experiment
+    if args.train_csv is not None:
+        cfg["train_csv"] = args.train_csv
 
     output_dir = cfg["output_dir"]
     os.makedirs(output_dir, exist_ok=True)
