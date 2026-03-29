@@ -42,8 +42,26 @@ if [ "$EXPERIMENT" == "rule_based" ]; then
         --test data/ViLexNorm/data/test.csv \
         --dev data/ViLexNorm/data/dev.csv \
         --output outputs/rule_based
+elif [ "$EXPERIMENT" == "augmented" ]; then
+    # BARTpho training with pseudo-labeled data
+    AUG_DATA="data/pseudo_label/train_augmented.csv"
+    if [ ! -f "$AUG_DATA" ]; then
+        echo "ERROR: Augmented data $AUG_DATA not found. Did you upload it?"
+        exit 1
+    fi
+    
+    python train.py \
+        --config config.yaml \
+        --train_csv $AUG_DATA \
+        --experiment bartpho-augmented
+
+    python evaluate.py \
+        --checkpoint outputs/bartpho/best_model \
+        --config config.yaml \
+        --split test dev \
+        --experiment bartpho-augmented
 else
-    # BARTpho training
+    # Standard BARTpho training
     python train.py \
         --config config.yaml \
         --experiment $EXPERIMENT
