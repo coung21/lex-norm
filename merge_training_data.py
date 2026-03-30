@@ -14,7 +14,7 @@ import os
 
 
 VILEXNORM_TRAIN = "data/ViLexNorm/data/train.csv"
-PSEUDO_LABELED = "data/pseudo_label/pseudo_labeled.csv"
+PSE_DEFAULT = "data/pseudo_label/pseudo_labeled.csv"
 OUTPUT_FILE = "data/pseudo_label/train_augmented.csv"
 
 
@@ -59,13 +59,10 @@ def load_pseudo_labeled(path: str, keep_same: bool = False) -> list[dict]:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Merge ViLexNorm + pseudo-labeled data"
-    )
-    parser.add_argument(
-        "--keep-same", action="store_true",
-        help="Keep rows where original == normalized",
-    )
+    parser = argparse.ArgumentParser(description="Merge ViLexNorm + pseudo-labeled data")
+    parser.add_argument("--input", type=str, default=PSE_DEFAULT, help="Path to pseudo-labeled CSV")
+    parser.add_argument("--output", type=str, default=OUTPUT_FILE, help="Path to output merged CSV")
+    parser.add_argument("--keep-same", action="store_true", help="Keep rows where original == normalized")
     args = parser.parse_args()
 
     print("=" * 60)
@@ -78,20 +75,20 @@ def main():
     print(f"   ✓ {len(vilexnorm)} rows")
 
     # Load pseudo-labeled
-    print(f"\n📂 Loading pseudo-labeled from {PSEUDO_LABELED}...")
-    if not os.path.exists(PSEUDO_LABELED):
-        print("   ✗ File not found! Run pseudo_label.py first.")
+    print(f"\n📂 Loading pseudo-labeled from {args.input}...")
+    if not os.path.exists(args.input):
+        print(f"   ✗ File not found: {args.input}")
         return
-    pseudo = load_pseudo_labeled(PSEUDO_LABELED, keep_same=args.keep_same)
+    pseudo = load_pseudo_labeled(args.input, keep_same=args.keep_same)
     print(f"   ✓ {len(pseudo)} rows")
 
     # Merge
     merged = vilexnorm + pseudo
 
     # Save
-    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
-    print(f"\n💾 Saving merged data to {OUTPUT_FILE}...")
-    with open(OUTPUT_FILE, "w", encoding="utf-8", newline="") as f:
+    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    print(f"\n💾 Saving merged data to {args.output}...")
+    with open(args.output, "w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["original", "normalized", "source"])
         writer.writeheader()
         writer.writerows(merged)
@@ -108,7 +105,7 @@ def main():
     for source, count in sorted(source_counts.items()):
         print(f"  {source:15s}: {count:>6} rows")
     print(f"  {'TOTAL':15s}: {len(merged):>6} rows")
-    print(f"\n  Output: {OUTPUT_FILE}")
+    print(f"\n  Output: {args.output}")
     print("=" * 60)
 
 

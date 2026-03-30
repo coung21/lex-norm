@@ -35,8 +35,28 @@ echo "====================================="
 echo "   Starting Training: $EXPERIMENT    "
 echo "====================================="
 
+# Helper function to find and setup data from Kaggle Input
+find_and_setup_data() {
+    local FILE_NAME=$1
+    local TARGET_PATH=$2
+    
+    if [ ! -f "$TARGET_PATH" ]; then
+        echo "Local file $TARGET_PATH not found. Searching in /kaggle/input..."
+        local SEARCH_RESULT=$(find /kaggle/input -name "$FILE_NAME" -print -quit 2>/dev/null)
+        
+        if [ -n "$SEARCH_RESULT" ]; then
+            echo "Found file at: $SEARCH_RESULT"
+            mkdir -p "$(dirname "$TARGET_PATH")"
+            cp "$SEARCH_RESULT" "$TARGET_PATH"
+        else
+            echo "ERROR: Could not find $FILE_NAME locally or in /kaggle/input."
+            exit 1
+        fi
+    fi
+}
+
 if [ "$EXPERIMENT" == "rule_based" ]; then
-    # Rule-based baseline (no training needed)
+    # Rule-based baseline
     python rule_based_baseline.py \
         --train data/ViLexNorm/data/train.csv \
         --test data/ViLexNorm/data/test.csv \
@@ -45,26 +65,7 @@ if [ "$EXPERIMENT" == "rule_based" ]; then
 elif [ "$EXPERIMENT" == "augmented" ]; then
     # Augmented BARTpho training
     AUG_DATA="data/pseudo_label/train_augmented.csv"
-    
-    # 1. Search locally first
-    if [ ! -f "$AUG_DATA" ]; then
-        echo "Local augmented data not found. Searching in /kaggle/input..."
-        
-        # 2. Search in all Kaggle Input datasets
-        SEARCH_RESULT=$(find /kaggle/input -name "train_augmented.csv" -print -quit 2>/dev/null)
-        
-        if [ -n "$SEARCH_RESULT" ]; then
-            echo "Found augmented data at: $SEARCH_RESULT"
-            # Ensure local directory exists
-            mkdir -p data/pseudo_label
-            # Link or copy to local path for consistency
-            cp "$SEARCH_RESULT" "$AUG_DATA"
-        else
-            echo "ERROR: Could not find train_augmented.csv locally or in /kaggle/input."
-            echo "Please upload the file as a Kaggle Dataset before running."
-            exit 1
-        fi
-    fi
+    find_and_setup_data "train_augmented.csv" "$AUG_DATA"
     
     python train.py \
         --config config.yaml \
@@ -76,6 +77,21 @@ elif [ "$EXPERIMENT" == "augmented" ]; then
         --config config.yaml \
         --split test dev \
         --experiment bartpho-augmented
+elif [ "$EXPERIMENT" == "filtered" ]; then
+    # Filtered Augmented BARTpho training
+    FILTERED_DATA="data/pseudo_label/train_filtered.csv"
+    find_and_setup_data "train_filtered.csv" "$FILTERED_DATA"
+    
+    python train.py \
+        --config config.yaml \
+        --train_csv "$FILTERED_DATA" \
+        --experiment bartpho-filtered
+
+    python evaluate.py \
+        --checkpoint outputs/bartpho/best_model \
+        --config config.yaml \
+        --split test dev \
+        --experiment bartpho-filtered
 else
     # Standard BARTpho training
     python train.py \

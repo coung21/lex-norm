@@ -7,3 +7,4 @@ pyyaml
 wandb
 pandas
 openai
+python-Levenshtein
