@@ -92,6 +92,25 @@ elif [ "$EXPERIMENT" == "filtered" ]; then
         --config config.yaml \
         --split test dev \
         --experiment bartpho-filtered
+elif [ "$EXPERIMENT" == "mean_teacher" ]; then
+    # Mean Teacher (EMA) training
+    python train_mean_teacher.py \
+        --config config.yaml \
+        --experiment bartpho-mean-teacher
+
+    # Evaluate Best Student Model
+    python evaluate.py \
+        --checkpoint outputs/bartpho/best_model \
+        --config config.yaml \
+        --split test dev \
+        --experiment bartpho-mean-teacher-student
+
+    # Evaluate Final EMA Teacher Model
+    python evaluate.py \
+        --checkpoint outputs/bartpho/ema_model \
+        --config config.yaml \
+        --split test dev \
+        --experiment bartpho-mean-teacher-ema
 else
     # Standard BARTpho training
     python train.py \

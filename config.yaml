@@ -10,6 +10,9 @@ warmup_ratio: 0.1
 weight_decay: 0.01
 num_beams: 4
 fp16: true
+# Mean Teacher Setup
+use_mean_teacher: true
+ema_decay: 0.999
 
 # Paths
 train_csv: "data/ViLexNorm/data/train.csv"
