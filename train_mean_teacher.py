@@ -37,6 +37,12 @@ class EMACallback(TrainerCallback):
             param.requires_grad = False
         self.ema_decay = ema_decay
 
+    def on_train_begin(self, args, state, control, **kwargs):
+        # Move EMA model to the same device as student model
+        device = next(self.model.parameters()).device
+        print(f"Moving EMA model to {device}...")
+        self.ema_model.to(device)
+
     def on_step_end(self, args, state, control, **kwargs):
         with torch.no_grad():
             for student_param, ema_param in zip(self.model.parameters(), self.ema_model.parameters()):
