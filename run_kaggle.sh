@@ -78,6 +78,16 @@ elif [ "$EXPERIMENT" == "augmented" ]; then
         --config config.yaml \
         --split test dev \
         --experiment byt5-augmented
+elif [ "$EXPERIMENT" == "char-t5" ]; then
+    # Custom Character-level T5 training
+    python train_char.py \
+        --config config.yaml
+    
+    python evaluate.py \
+        --checkpoint "outputs/char-t5-small/best_model" \
+        --config config.yaml \
+        --split test dev \
+        --experiment char-t5
 elif [ "$EXPERIMENT" == "filtered" ]; then
     # Filtered Augmented training
     FILTERED_DATA="data/pseudo_label/train_filtered.csv"

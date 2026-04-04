@@ -19,6 +19,7 @@ import wandb
 import yaml
 from tqdm import tqdm
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+from char_tokenizer import CharTokenizer
 
 from metrics import compute_all_metrics, print_metrics
 
@@ -141,7 +142,20 @@ def main():
     # --- Load model ---
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Loading model from {args.checkpoint} (device: {device})...")
-    tokenizer = AutoTokenizer.from_pretrained(args.checkpoint)
+    
+    # Check if it's a character-level model
+    vocab_path = os.path.join(args.checkpoint, "vocab.json")
+    if os.path.exists(vocab_path):
+        print("  Detected custom CharTokenizer...")
+        tokenizer = CharTokenizer(
+            vocab_file=vocab_path,
+            pad_token="<pad>",
+            eos_token="</s>",
+            unk_token="<unk>",
+        )
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(args.checkpoint)
+        
     model = AutoModelForSeq2SeqLM.from_pretrained(args.checkpoint).to(device)
     print(f"  Model loaded: {model.config.name_or_path}")
 
