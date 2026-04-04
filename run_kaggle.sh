@@ -62,6 +62,7 @@ if [ "$EXPERIMENT" == "rule_based" ]; then
         --test data/ViLexNorm/data/test.csv \
         --dev data/ViLexNorm/data/dev.csv \
         --output outputs/rule_based
+elif [ "$EXPERIMENT" == "augmented" ]; then
     # Augmented training
     AUG_DATA="data/pseudo_label/train_augmented.csv"
     find_and_setup_data "train_augmented.csv" "$AUG_DATA"
