@@ -17,6 +17,11 @@ class CharTokenizer(PreTrainedTokenizer):
     def get_vocab(self):
         return dict(self.vocab)
 
+    def build_inputs_with_special_tokens(self, token_ids_0: List[int], token_ids_1: Optional[List[int]] = None) -> List[int]:
+        if token_ids_1 is None:
+            return token_ids_0 + [self.eos_token_id]
+        return token_ids_0 + [self.eos_token_id] + token_ids_1 + [self.eos_token_id]
+
     def _tokenize(self, text: str) -> List[str]:
         return list(text)
 
@@ -25,6 +30,13 @@ class CharTokenizer(PreTrainedTokenizer):
 
     def _convert_id_to_token(self, index: int) -> str:
         return self.ids_to_tokens.get(index, self.unk_token)
+
+    def get_special_tokens_mask(self, token_ids_0: List[int], token_ids_1: Optional[List[int]] = None, already_has_special_tokens: bool = False) -> List[int]:
+        if already_has_special_tokens:
+            return super().get_special_tokens_mask(token_ids_0, token_ids_1, already_has_special_tokens=True)
+        if token_ids_1 is None:
+            return [0] * len(token_ids_0) + [1]
+        return [0] * len(token_ids_0) + [1] + [0] * len(token_ids_1) + [1]
 
     def save_vocabulary(self, save_directory: str, filename_prefix: Optional[str] = None) -> tuple:
         if not os.path.isdir(save_directory):

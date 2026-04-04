@@ -66,7 +66,7 @@ def main():
         output_dir="outputs/char-t5-small",
         num_train_epochs=int(cfg["epochs"]),
         per_device_train_batch_size=int(cfg["batch_size"]),
-        learning_rate=float(cfg["learning_rate"]),
+        learning_rate=1e-3, # Faster convergence for training from scratch
         fp16=False,
         eval_strategy="epoch",
         save_strategy="epoch",
