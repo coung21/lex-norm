@@ -1,26 +1,23 @@
 # ViLexNorm - Vietnamese Lexical Normalization Config
-# Model: BARTpho-syllable (vinai/bartpho-syllable)
+# Model: ByT5-small (google/byt5-small) - Byte-level model
 
-model_name: "vinai/bartpho-syllable"
-max_length: 64
-batch_size: 16
-learning_rate: 5e-5
-epochs: 4
+model_name: "google/byt5-small"
+max_length: 256
+batch_size: 8
+learning_rate: 1e-4
+epochs: 10
 warmup_ratio: 0.1
 weight_decay: 0.01
 num_beams: 4
 fp16: true
-# Mean Teacher Setup
-use_mean_teacher: true
-ema_decay: 0.999
 
 # Paths
 train_csv: "data/ViLexNorm/data/train.csv"
 train_augmented_csv: "data/pseudo_label/train_augmented.csv"
 dev_csv: "data/ViLexNorm/data/dev.csv"
 test_csv: "data/ViLexNorm/data/test.csv"
-output_dir: "outputs/bartpho"
+output_dir: "outputs/byt5-small"
 
 # Wandb
 wandb_project: "lex-norm"
-wandb_run_name: "bartpho-syllable"
+wandb_run_name: "byt5-small"

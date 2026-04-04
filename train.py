@@ -1,7 +1,7 @@
 """
-Train BARTpho-syllable for Vietnamese Lexical Normalization.
+Train ByT5-small for Vietnamese Lexical Normalization.
 
-Fine-tunes vinai/bartpho-syllable as a seq2seq model on the ViLexNorm dataset.
+Fine-tunes google/byt5-small as a seq2seq model on the ViLexNorm dataset.
 Logs training metrics to wandb and saves the best checkpoint.
 
 Usage:
@@ -102,7 +102,7 @@ def main():
     )
 
     print("=" * 60)
-    print("  BARTpho-Syllable Training")
+    print("  ByT5-Small Training")
     print("=" * 60)
     print(f"  Model:       {cfg['model_name']}")
     print(f"  Epochs:      {cfg['epochs']}")

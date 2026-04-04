@@ -1,12 +1,12 @@
 """
-Evaluate a trained BARTpho-syllable model on Vietnamese Lexical Normalization.
+Evaluate a trained ByT5-small model on Vietnamese Lexical Normalization.
 
 Loads a checkpoint, generates predictions on the test set (and optionally dev set),
 computes ERR/F1 metrics, logs to wandb, and saves predictions.
 
 Usage:
-    python evaluate.py --checkpoint outputs/bartpho/best_model
-    python evaluate.py --checkpoint outputs/bartpho/best_model --split test --split dev
+    python evaluate.py --checkpoint outputs/byt5-small/best_model
+    python evaluate.py --checkpoint outputs/byt5-small/best_model --split test --split dev
 """
 
 import argparse
@@ -93,7 +93,7 @@ def save_predictions(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Evaluate BARTpho for lexical normalization"
+        description="Evaluate ByT5 for lexical normalization"
     )
     parser.add_argument(
         "--checkpoint", required=True, help="Path to model checkpoint directory"

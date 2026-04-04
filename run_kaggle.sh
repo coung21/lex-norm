@@ -27,8 +27,8 @@ if [ -z "$WANDB_API_KEY" ]; then
     export WANDB_MODE=offline
 fi
 
-# Get experiment from argument, default to bartpho if not provided
-EXPERIMENT=${1:-bartpho}
+# Get experiment from argument, default to byt5-small if not provided
+EXPERIMENT=${1:-byt5-small}
 
 echo ""
 echo "====================================="
@@ -62,57 +62,39 @@ if [ "$EXPERIMENT" == "rule_based" ]; then
         --test data/ViLexNorm/data/test.csv \
         --dev data/ViLexNorm/data/dev.csv \
         --output outputs/rule_based
-elif [ "$EXPERIMENT" == "augmented" ]; then
-    # Augmented BARTpho training
+    # Augmented training
     AUG_DATA="data/pseudo_label/train_augmented.csv"
     find_and_setup_data "train_augmented.csv" "$AUG_DATA"
     
     python train.py \
         --config config.yaml \
         --train_csv "$AUG_DATA" \
-        --experiment bartpho-augmented
-
+        --experiment byt5-augmented
+    
+    OUTPUT_DIR=$(grep "output_dir" config.yaml | cut -d'"' -f2)
     python evaluate.py \
-        --checkpoint outputs/bartpho/best_model \
+        --checkpoint "${OUTPUT_DIR:-outputs/byt5-small}/best_model" \
         --config config.yaml \
         --split test dev \
-        --experiment bartpho-augmented
+        --experiment byt5-augmented
 elif [ "$EXPERIMENT" == "filtered" ]; then
-    # Filtered Augmented BARTpho training
+    # Filtered Augmented training
     FILTERED_DATA="data/pseudo_label/train_filtered.csv"
     find_and_setup_data "train_filtered.csv" "$FILTERED_DATA"
     
     python train.py \
         --config config.yaml \
         --train_csv "$FILTERED_DATA" \
-        --experiment bartpho-filtered
-
+        --experiment byt5-filtered
+    
+    OUTPUT_DIR=$(grep "output_dir" config.yaml | cut -d'"' -f2)
     python evaluate.py \
-        --checkpoint outputs/bartpho/best_model \
+        --checkpoint "${OUTPUT_DIR:-outputs/byt5-small}/best_model" \
         --config config.yaml \
         --split test dev \
-        --experiment bartpho-filtered
-elif [ "$EXPERIMENT" == "mean_teacher" ]; then
-    # Mean Teacher (EMA) training
-    python train_mean_teacher.py \
-        --config config.yaml \
-        --experiment bartpho-mean-teacher
-
-    # Evaluate Best Student Model
-    python evaluate.py \
-        --checkpoint outputs/bartpho/best_model \
-        --config config.yaml \
-        --split test dev \
-        --experiment bartpho-mean-teacher-student
-
-    # Evaluate Final EMA Teacher Model
-    python evaluate.py \
-        --checkpoint outputs/bartpho/ema_model \
-        --config config.yaml \
-        --split test dev \
-        --experiment bartpho-mean-teacher-ema
+        --experiment byt5-filtered
 else
-    # Standard BARTpho training
+    # Standard training
     python train.py \
         --config config.yaml \
         --experiment $EXPERIMENT
@@ -122,8 +104,9 @@ else
     echo "   Starting Evaluation               "
     echo "====================================="
 
+    OUTPUT_DIR=$(grep "output_dir" config.yaml | cut -d'"' -f2)
     python evaluate.py \
-        --checkpoint outputs/bartpho/best_model \
+        --checkpoint "${OUTPUT_DIR:-outputs/byt5-small}/best_model" \
         --config config.yaml \
         --split test dev \
         --experiment $EXPERIMENT
