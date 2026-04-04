@@ -64,9 +64,9 @@ def main():
     # 5. Training
     training_args = Seq2SeqTrainingArguments(
         output_dir="outputs/char-t5-small",
-        num_train_epochs=cfg["epochs"],
-        per_device_train_batch_size=cfg["batch_size"],
-        learning_rate=cfg["learning_rate"],
+        num_train_epochs=int(cfg["epochs"]),
+        per_device_train_batch_size=int(cfg["batch_size"]),
+        learning_rate=float(cfg["learning_rate"]),
         fp16=False,
         eval_strategy="epoch",
         save_strategy="epoch",
