@@ -1,15 +1,15 @@
 """
-Train ByT5-small for Vietnamese Lexical Normalization.
+Train ByT5-small for Vietnamese Lexical Normalization (Mean Teacher).
 
 Fine-tunes google/byt5-small as a seq2seq model on the ViLexNorm dataset.
 Logs training metrics to wandb and saves the best checkpoint.
 
 Usage:
-    python train.py --config config.yaml
-    python train.py --config config.yaml --epochs 2 --batch_size 8
+    python train_mean_teacher.py --config config.yaml
 """
 
 import argparse
+import copy
 import csv
 import os
 
@@ -23,7 +23,23 @@ from transformers import (
     DataCollatorForSeq2Seq,
     Seq2SeqTrainer,
     Seq2SeqTrainingArguments,
+    TrainerCallback,
 )
+
+
+class EMACallback(TrainerCallback):
+    """Updates the teacher model weights using EMA at the end of each training step."""
+    def __init__(self, model, ema_decay=0.999):
+        self.model = model
+        self.ema_model = copy.deepcopy(model)
+        for param in self.ema_model.parameters():
+            param.requires_grad = False
+        self.ema_decay = ema_decay
+
+    def on_step_end(self, args, state, control, **kwargs):
+        with torch.no_grad():
+            for student_param, ema_param in zip(self.model.parameters(), self.ema_model.parameters()):
+                ema_param.data.mul_(self.ema_decay).add_(student_param.data, alpha=1.0 - self.ema_decay)
 
 
 def load_config(config_path: str) -> dict:
@@ -64,7 +80,7 @@ def preprocess_function(examples, tokenizer, max_length):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train BARTpho for lexical normalization")
+    parser = argparse.ArgumentParser(description="Train ByT5 for lexical normalization")
     parser.add_argument("--config", default="config.yaml", help="Path to config YAML")
     parser.add_argument("--epochs", type=int, default=None, help="Override epochs")
     parser.add_argument("--batch_size", type=int, default=None, help="Override batch size")
@@ -102,7 +118,7 @@ def main():
     )
 
     print("=" * 60)
-    print("  ByT5-Small Training")
+    print("  ByT5-Small Mean Teacher Training")
     print("=" * 60)
     print(f"  Model:       {cfg['model_name']}")
     print(f"  Epochs:      {cfg['epochs']}")
@@ -148,6 +164,15 @@ def main():
         label_pad_token_id=-100,
     )
 
+    use_mean_teacher = cfg.get("use_mean_teacher", False)
+    ema_decay = cfg.get("ema_decay", 0.999)
+    callbacks = []
+    ema_callback = None
+    if use_mean_teacher:
+        print(f"\nInitializing Mean Teacher (EMA) with decay {ema_decay}...")
+        ema_callback = EMACallback(model=model, ema_decay=ema_decay)
+        callbacks.append(ema_callback)
+
     # --- Training arguments ---
     training_args = Seq2SeqTrainingArguments(
         output_dir=output_dir,
@@ -180,6 +205,7 @@ def main():
         eval_dataset=dev_dataset,
         processing_class=tokenizer,
         data_collator=data_collator,
+        callbacks=callbacks,
     )
 
     # --- Train ---
@@ -204,6 +230,29 @@ def main():
     artifact.add_dir(best_model_dir)
     wandb.log_artifact(artifact)
     print("  Artifact uploaded.")
+
+    # --- Save EMA model explicitly at the end ---
+    if use_mean_teacher and ema_callback is not None:
+        ema_model_dir = os.path.join(output_dir, "ema_model")
+        print(f"\nEvaluating and saving EMA (Teacher) model to {ema_model_dir}...")
+        # Swap weights to evaluate teacher model
+        model.load_state_dict(ema_callback.ema_model.state_dict())
+        ema_metrics = trainer.evaluate(metric_key_prefix="ema_eval")
+        print("EMA Model metrics:", ema_metrics)
+        wandb.log(ema_metrics)
+        
+        trainer.save_model(ema_model_dir)
+        tokenizer.save_pretrained(ema_model_dir)
+        
+        ema_artifact = wandb.Artifact(
+            name=f"{cfg['wandb_run_name']}-ema-model",
+            type="model",
+            description=f"Final EMA checkpoint for {cfg['wandb_run_name']}",
+            metadata=cfg,
+        )
+        ema_artifact.add_dir(ema_model_dir)
+        wandb.log_artifact(ema_artifact)
+        print("  EMA Artifact uploaded.")
 
     print("\nTraining complete!")
     wandb.finish()

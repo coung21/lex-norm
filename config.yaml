@@ -4,12 +4,13 @@
 model_name: "google/byt5-small"
 max_length: 256
 batch_size: 8
-learning_rate: 1e-4
+learning_rate: 5e-5
 epochs: 10
 warmup_ratio: 0.1
 weight_decay: 0.01
 num_beams: 4
-fp16: true
+fp16: false
+bf16: false # Set to true only if GPU supports it (e.g., A100, T4 is better with fp16 but ByT5 is tricky)
 
 # Paths
 train_csv: "data/ViLexNorm/data/train.csv"
